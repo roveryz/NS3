@@ -204,9 +204,9 @@ def register_types(module):
     module.add_class('Synchronizer', parent=root_module['ns3::Object'])
     ## system-thread.h (module 'core'): ns3::SystemThread [class]
     module.add_class('SystemThread', parent=root_module['ns3::SimpleRefCount< ns3::SystemThread, ns3::empty, ns3::DefaultDeleter<ns3::SystemThread> >'])
-    typehandlers.add_type_alias(u'pthread_t', u'ns3::SystemThread::ThreadId')
-    typehandlers.add_type_alias(u'pthread_t*', u'ns3::SystemThread::ThreadId*')
-    typehandlers.add_type_alias(u'pthread_t&', u'ns3::SystemThread::ThreadId&')
+    typehandlers.add_type_alias(u'std::thread', u'ns3::SystemThread::ThreadId')
+    typehandlers.add_type_alias(u'std::thread*', u'ns3::SystemThread::ThreadId*')
+    typehandlers.add_type_alias(u'std::thread&', u'ns3::SystemThread::ThreadId&')
     ## nstime.h (module 'core'): ns3::Time [class]
     module.add_class('Time')
     ## nstime.h (module 'core'): ns3::Time::Unit [enumeration]
@@ -2476,7 +2476,7 @@ def register_Ns3SystemThread_methods(root_module, cls):
     ## system-thread.h (module 'core'): static bool ns3::SystemThread::Equals(ns3::SystemThread::ThreadId id) [member function]
     cls.add_method('Equals', 
                    'bool', 
-                   [param('pthread_t', 'id')], 
+                   [param('std::thread', 'id')],
                    is_static=True)
     ## system-thread.h (module 'core'): void ns3::SystemThread::Join() [member function]
     cls.add_method('Join', 

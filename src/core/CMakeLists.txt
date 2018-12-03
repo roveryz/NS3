@@ -97,9 +97,10 @@ if (${THREADS_FOUND})
 
     set(libraries_to_link
         ${libraries_to_link}
-        ${CMAKE_THREAD_LIBS_INIT}
+        pthread
         )
 endif()
+
 
 #Define core lib sources
 set(source_files

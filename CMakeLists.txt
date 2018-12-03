@@ -96,7 +96,7 @@ set(libs_to_build
         #mobility              #
         #mpi                   #
         #netanim               # Not working with Clang on Windows
-        #network               #
+        network               #
         #nix-vector-routing
         #olsr
         ##openflow

@@ -175,23 +175,31 @@ macro(process_options)
     endif()
 
     #removed in favor of C++ threads
-    #if(${NS3_PTHREAD})
-    #    set(THREADS_PREFER_PTHREAD_FLAG)
-    #    find_package(Threads REQUIRED)
-    #    if(NOT ${THREADS_FOUND})
-    #        message(FATAL_ERROR Thread library not found)
-    #    else()
-    #        include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
-    #        add_definitions(-DHAVE_PTHREAD_H)
-    #    endif()
-    #endif()
+    if(${NS3_PTHREAD})
+        set(THREADS_PREFER_PTHREAD_FLAG)
+        find_package(Threads REQUIRED)
+        if(NOT ${THREADS_FOUND})
+            message(FATAL_ERROR Thread library not found)
+        else()
+            include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
+            add_definitions(-DHAVE_PTHREAD_H)
+        endif()
+    endif()
     set(THREADS_FOUND TRUE)
 
     if(${NS3_PYTHON})
         find_package(Python2 REQUIRED COMPONENTS Interpreter Development)
-        file(MAKE_DIRECTORY ${CMAKE_OUTPUT_DIRECTORY}/pybindgenTmp)
-        link_directories(${Python2_LIBRARY_DIRS})
-        include_directories( ${Python2_INCLUDE_DIRS})
+        if (NOT ${Python2_FOUND})
+            message(FATAL_ERROR "Python2 not found")
+        else()
+            file(MAKE_DIRECTORY ${CMAKE_OUTPUT_DIRECTORY}/ns)
+            file(COPY ${CMAKE_SOURCE_DIR}/bindings/python/ns__init__.py DESTINATION ${CMAKE_OUTPUT_DIRECTORY}/ns)
+            file(RENAME ${CMAKE_OUTPUT_DIRECTORY}/ns/ns__init__.py ${CMAKE_OUTPUT_DIRECTORY}/ns/__init__.py)
+
+            link_directories(${Python2_LIBRARY_DIRS})
+            include_directories( ${Python2_INCLUDE_DIRS})
+            write_ns3py_module(${libs_to_build})
+        endif()
     endif()
 
     if(${NS3_MPI})
@@ -342,6 +350,25 @@ macro (write_module_header name header_files)
 endmacro()
 
 
+macro (write_ns3py_module libraries_to_build)
+    #Convert cmake array into a python array
+    string(REPLACE ";" "\",\"" libraries_to_build_python_array "${libraries_to_build}" )
+    #Write contents of ns.py
+    set(contents)
+    list(APPEND contents "import warnings
+")
+    list(APPEND contents "warnings.warn(\"the ns3 module is a compatibility layer and should not be used in newly written code\", DeprecationWarning, stacklevel=2)
+")
+    list(APPEND contents "for module in [\"${libraries_to_build_python_array}\"]:
+")
+    list(APPEND contents "  from \"ns.%s\" import * % (module.replace('-', '_'))
+")
+    list(APPEND contents "
+")
+    file(WRITE ${CMAKE_OUTPUT_DIRECTORY}/ns/ns.py ${contents})
+endmacro()
+
+
 macro (build_lib libname source_files header_files libraries_to_link test_sources)
 
     #Create shared library with sources and headers
@@ -385,10 +412,9 @@ macro (build_lib libname source_files header_files libraries_to_link test_source
         #todo: fix python module names, output folder and missing links
         set(module_src ns3module.cc)
         set(module_hdr ns3module.h)
-
-        set(modulegen_modular_command ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_OUTPUT_DIRECTORY} ${Python2_EXEC} ${CMAKE_SOURCE_DIR}/bindings/python/ns3modulegen-modular.py ${CMAKE_CURRENT_SOURCE_DIR} ${arch} ${libname} ./bindings/${module_src})
-        set(modulegen_arch_command ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_OUTPUT_DIRECTORY}/ ${Python2_EXEC} ./bindings/modulegen__${arch}.py 2> ./bindings/ns3modulegen.log)
-        #message(WARNING ${comm})
+        set(modulegen_modular_command DISPLAY=:0 ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_OUTPUT_DIRECTORY} python2 ${CMAKE_SOURCE_DIR}/bindings/python/ns3modulegen-modular.py ${CMAKE_CURRENT_SOURCE_DIR} ${arch} ${libname} ./bindings/${module_src})
+        set(modulegen_arch_command DISPLAY=:0 ${CMAKE_COMMAND} -E env PYTHONPATH=${CMAKE_OUTPUT_DIRECTORY}/ python2 ./bindings/modulegen__${arch}.py 2> ./bindings/ns3modulegen.log)
+        #message(WARNING ${modulegen_modular_command})
         execute_process(
                 COMMAND ${modulegen_modular_command}
                 COMMAND ${modulegen_arch_command}
@@ -396,10 +422,16 @@ macro (build_lib libname source_files header_files libraries_to_link test_source
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                 #OUTPUT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/bindings/${module_src}
                 RESULT_VARIABLE res
-                ERROR_QUIET
+                #ERROR_QUIET
 
         )
-        add_library(ns3module_${libname} SHARED ${CMAKE_CURRENT_SOURCE_DIR}/bindings/${module_src} ${CMAKE_CURRENT_SOURCE_DIR}/bindings/${module_hdr})
+
+        set(python_module_files ${CMAKE_CURRENT_SOURCE_DIR}/bindings/${module_hdr} ${CMAKE_CURRENT_SOURCE_DIR}/bindings/${module_src})
+        if(${libname} STREQUAL "core")
+            list(APPEND python_module_files ${CMAKE_CURRENT_SOURCE_DIR}/bindings/module_helpers.cc ${CMAKE_CURRENT_SOURCE_DIR}/bindings/scan-header.h)
+        endif()
+        message(WARNING ${python_module_files})
+        add_library(ns3module_${libname} SHARED "${python_module_files}")
         target_link_libraries(ns3module_${libname} ${LIB_AS_NEEDED_PRE} ${ns3-libs} ${Python2_LIBRARIES} ${LIB_AS_NEEDED_POST})
         #message(WARNING ${res})
     endif()
